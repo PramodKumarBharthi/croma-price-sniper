@@ -15,26 +15,36 @@ def send_price_alert(
     reference_price: float,
     url: str,
     pincode: str = "500083",
+    bank_discount: float = 0.0,
+    net_effective_price: float = 0.0,
+    bank_offer_summary: str = "",
 ) -> bool:
     """
-    Sends an urgent price drop push notification via ntfy.sh using curl_cffi.
+    Sends an urgent price drop push notification via ntfy.sh with Net Effective Price details.
     """
-    drop_amt = reference_price - live_price
+    effective_price = net_effective_price if net_effective_price > 0 else (live_price - bank_discount)
+    drop_amt = reference_price - effective_price
     endpoint = f"https://ntfy.sh/{NTFY_TOPIC}"
 
     headers = {
-        "Title": f"PRICE DROP: Rs. {live_price:,.0f} (-Rs. {drop_amt:,.0f})",
+        "Title": f"NET PRICE DROP: Rs. {effective_price:,.0f} (-Rs. {drop_amt:,.0f})",
         "Priority": "urgent",
         "Tags": "rotating_light,money_with_wings",
         "Click": url,
         "Actions": f"view, Buy Now on Croma, {url}, clear=true",
     }
 
+    if bank_discount > 0:
+        offer_str = f"-Rs. {bank_discount:,.0f} ({bank_offer_summary})"
+    else:
+        offer_str = "No active instant bank discount"
+
     body = (
         f"Product: {product_name}\n"
-        f"New Price: Rs. {live_price:,.0f}\n"
-        f"Previous Price: Rs. {reference_price:,.0f}\n"
-        f"Amount Saved: Rs. {drop_amt:,.0f}\n"
+        f"Sticker Price: Rs. {live_price:,.0f}\n"
+        f"Bank Offer: {offer_str}\n"
+        f"Net Effective Price: Rs. {effective_price:,.0f} (Was Rs. {reference_price:,.0f})\n"
+        f"Total Savings: Rs. {drop_amt:,.0f}\n"
         f"Pincode: {pincode}\n"
         f"Link: {url}"
     )
@@ -47,7 +57,7 @@ def send_price_alert(
             timeout=15,
         )
         if response.status_code == 200:
-            print(f"[Notifier] Price alert sent successfully to {endpoint} (HTTP 200)")
+            print(f"[Notifier] Net price alert sent successfully to {endpoint} (HTTP 200)")
             return True
         else:
             print(
@@ -65,14 +75,25 @@ def send_tracking_started_alert(
     live_price: float,
     url: str,
     pincode: str = "500083",
+    bank_discount: float = 0.0,
+    net_effective_price: float = 0.0,
+    bank_offer_summary: str = "",
 ) -> bool:
     """
     Sends a one-time onboarding notification when a product is newly tracked.
     """
+    effective_price = net_effective_price if net_effective_price > 0 else (live_price - bank_discount)
     endpoint = f"https://ntfy.sh/{NTFY_TOPIC}"
 
+    if bank_discount > 0:
+        title = f"TRACKING STARTED: Net Rs. {effective_price:,.0f}"
+        offer_str = f"-Rs. {bank_discount:,.0f} ({bank_offer_summary})"
+    else:
+        title = f"TRACKING STARTED: Rs. {live_price:,.0f}"
+        offer_str = "No active instant bank discount"
+
     headers = {
-        "Title": f"TRACKING STARTED: Rs. {live_price:,.0f}",
+        "Title": title,
         "Priority": "default",
         "Tags": "white_check_mark,eyes",
         "Click": url,
@@ -82,7 +103,9 @@ def send_tracking_started_alert(
     body = (
         f"Tracking Started!\n"
         f"Product: {product_name}\n"
-        f"Baseline Price: Rs. {live_price:,.0f}\n"
+        f"Sticker Price: Rs. {live_price:,.0f}\n"
+        f"Bank Offer: {offer_str}\n"
+        f"Net Effective Price: Rs. {effective_price:,.0f}\n"
         f"Pincode: {pincode}\n"
         f"Link: {url}\n"
         f"Status: Actively monitoring 24/7 for price drops."
